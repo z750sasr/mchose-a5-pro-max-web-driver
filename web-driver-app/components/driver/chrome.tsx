@@ -66,36 +66,6 @@ export function TopBar({
   );
 }
 
-type HardwareIntroContent = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  facts: ReadonlyArray<{ label: string; value: string }>;
-};
-
-export function HardwareIntro({ content }: { content: HardwareIntroContent }) {
-  return (
-    <section className="hardware-intro" id="hardware-notes" aria-labelledby="hardware-intro-title">
-      <div className="hardware-intro-label">
-        <span className="eyebrow">{content.eyebrow}</span>
-        <small>Editable project introduction</small>
-      </div>
-      <div className="hardware-intro-copy">
-        <h2 id="hardware-intro-title">{content.title}</h2>
-        <p>{content.description}</p>
-      </div>
-      <dl className="hardware-facts">
-        {content.facts.map((fact) => (
-          <div key={fact.label}>
-            <dt>{fact.label}</dt>
-            <dd>{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}
-
 export function Sidebar({
   model,
   tab,
