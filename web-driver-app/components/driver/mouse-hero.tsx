@@ -8,6 +8,7 @@ export function MouseHero({
   snapshot,
   connected,
   compatibleBrowser,
+  waitingForMouse,
   busy,
   onSelectProfile,
 }: {
@@ -15,6 +16,7 @@ export function MouseHero({
   snapshot: DeviceSnapshot;
   connected: boolean;
   compatibleBrowser: boolean;
+  waitingForMouse: boolean;
   busy: boolean;
   onSelectProfile: (profile: number) => void;
 }) {
@@ -28,6 +30,9 @@ export function MouseHero({
         <p>{model.hero.description}</p>
         {!compatibleBrowser && (
           <div className="browser-warning">Use desktop Chrome or Edge over HTTPS to connect with WebHID.</div>
+        )}
+        {compatibleBrowser && waitingForMouse && (
+          <div className="browser-warning standby-warning">Receiver connected. Wake or move the mouse; its onboard information will load automatically.</div>
         )}
       </div>
 

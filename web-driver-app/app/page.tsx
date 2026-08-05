@@ -75,6 +75,7 @@ export default function Home() {
   const [device, setDevice] = useState<A5HIDDevice | null>(null);
   const [availableDevices, setAvailableDevices] = useState<A5HIDDevice[]>([]);
   const [snapshot, setSnapshot] = useState<DeviceSnapshot>(DEFAULT_SNAPSHOT);
+  const [mouseReady, setMouseReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("Reading onboard settings");
   const [dpiDirty, setDpiDirty] = useState(false);
@@ -83,12 +84,19 @@ export default function Home() {
   const protocolRef = useRef<A5Protocol | null>(null);
   const activeDeviceRef = useRef<A5HIDDevice | null>(null);
   const availableDevicesRef = useRef<A5HIDDevice[]>([]);
+  const mouseReadyRef = useRef(false);
   const toastId = useRef(0);
 
   const browserReady = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const hid = browserReady ? (navigator as NavigatorWithHid).hid : undefined;
   const compatibleBrowser = Boolean(hid && globalThis.isSecureContext);
-  const connected = Boolean(device?.opened);
+  const hidConnected = Boolean(device?.opened);
+  const connected = hidConnected && mouseReady;
+
+  const updateMouseReady = useCallback((ready: boolean) => {
+    mouseReadyRef.current = ready;
+    setMouseReady(ready);
+  }, []);
 
   const addLog = useCallback((message: string) => {
     const time = new Intl.DateTimeFormat(undefined, {
@@ -134,19 +142,21 @@ export default function Home() {
         }
 
         setSnapshot(next);
+        updateMouseReady(true);
         setDpiDirty(false);
         addLog(`Profile ${next.profile} loaded from onboard memory.`);
       } finally {
         setBusy(false);
       }
     },
-    [addLog],
+    [addLog, updateMouseReady],
   );
 
   const attachDevice = useCallback(
     async (nextDevice: A5HIDDevice, notice = `${MODEL.name} connected — onboard settings loaded.`) => {
       const previousDevice = activeDeviceRef.current;
       const previousProtocol = protocolRef.current;
+      const previousMouseReady = mouseReadyRef.current;
       setBusy(true);
       setBusyLabel("Opening vendor HID channel");
       try {
@@ -154,11 +164,21 @@ export default function Home() {
         await protocol.open();
         protocolRef.current = protocol;
         activeDeviceRef.current = nextDevice;
+        updateMouseReady(false);
         setDevice(nextDevice);
         rememberDevices([...availableDevicesRef.current, nextDevice]);
         addLog(`${productInfo(nextDevice).transport} channel opened on report ${protocol.reportId}.`);
-        await loadSnapshot(protocol);
-        notify("success", notice);
+        try {
+          await loadSnapshot(protocol);
+          notify("success", notice);
+        } catch (error) {
+          if (connectionFor(nextDevice)?.kind !== "receiver") throw error;
+          updateMouseReady(false);
+          setSnapshot(DEFAULT_SNAPSHOT);
+          setDpiDirty(false);
+          addLog(`${productInfo(nextDevice).transport} remains connected while the wireless mouse is asleep.`);
+          notify("success", "Receiver connected. Wake or move the mouse to load its settings automatically.");
+        }
       } catch (error) {
         const canRestorePrevious = Boolean(
           previousDevice && previousDevice !== nextDevice && previousDevice.opened && previousProtocol,
@@ -166,6 +186,7 @@ export default function Home() {
         protocolRef.current = canRestorePrevious ? previousProtocol : null;
         activeDeviceRef.current = canRestorePrevious ? previousDevice : null;
         setDevice(canRestorePrevious ? previousDevice : null);
+        updateMouseReady(canRestorePrevious ? previousMouseReady : false);
         if (!canRestorePrevious) setSnapshot(DEFAULT_SNAPSHOT);
         const message = formatError(error);
         addLog(`Connection failed: ${message}`);
@@ -173,7 +194,7 @@ export default function Home() {
         setBusy(false);
       }
     },
-    [addLog, loadSnapshot, notify, rememberDevices],
+    [addLog, loadSnapshot, notify, rememberDevices, updateMouseReady],
   );
 
   const connect = useCallback(async () => {
@@ -214,11 +235,12 @@ export default function Home() {
     protocolRef.current = null;
     activeDeviceRef.current = null;
     setDevice(null);
+    updateMouseReady(false);
     setSnapshot(DEFAULT_SNAPSHOT);
     rememberDevices([]);
     await Promise.all(devices.map((entry) => (entry.opened ? entry.close().catch(() => undefined) : Promise.resolve())));
     addLog("All HID channels closed for this page session.");
-  }, [addLog, rememberDevices]);
+  }, [addLog, rememberDevices, updateMouseReady]);
 
   const switchDevice = useCallback(
     async (deviceKey: string) => {
@@ -283,6 +305,7 @@ export default function Home() {
       protocolRef.current = null;
       activeDeviceRef.current = null;
       setDevice(null);
+      updateMouseReady(false);
       setSnapshot(DEFAULT_SNAPSHOT);
       addLog("Active device disconnected.");
 
@@ -300,7 +323,42 @@ export default function Home() {
       hid.removeEventListener("connect", onConnect);
       hid.removeEventListener("disconnect", onDisconnect);
     };
-  }, [addLog, attachDevice, hid, notify, rememberDevices]);
+  }, [addLog, attachDevice, hid, notify, rememberDevices, updateMouseReady]);
+
+  useEffect(() => {
+    const waitingOnReceiver = Boolean(
+      device && hidConnected && !mouseReady && connectionFor(device)?.kind === "receiver",
+    );
+    if (!waitingOnReceiver || !device) return;
+
+    let checking = false;
+    const checkForWake = async () => {
+      const protocol = protocolRef.current;
+      if (checking || busy || !protocol || activeDeviceRef.current !== device) return;
+      checking = true;
+      try {
+        await protocol.getBattery();
+        if (activeDeviceRef.current !== device) return;
+        await loadSnapshot(protocol);
+        if (activeDeviceRef.current === device) {
+          addLog("Wireless mouse is active again; onboard information refreshed.");
+          notify("success", "Mouse awake — settings and battery information are ready.");
+        }
+      } catch {
+        // A sleeping mouse does not answer receiver-routed feature reports. Keep
+        // the receiver session open and try again without surfacing noisy errors.
+      } finally {
+        checking = false;
+      }
+    };
+
+    const firstCheck = window.setTimeout(() => void checkForWake(), 750);
+    const interval = window.setInterval(() => void checkForWake(), 2500);
+    return () => {
+      window.clearTimeout(firstCheck);
+      window.clearInterval(interval);
+    };
+  }, [addLog, busy, device, hidConnected, loadSnapshot, mouseReady, notify]);
 
   const runSetting = useCallback(
     async (label: string, action: (protocol: A5Protocol) => Promise<void>) => {
@@ -431,7 +489,8 @@ export default function Home() {
         model={MODEL}
         device={device}
         availableDevices={availableDevices}
-        connected={connected}
+        hidConnected={hidConnected}
+        mouseReady={mouseReady}
         compatibleBrowser={compatibleBrowser}
         busy={busy}
         onConnect={() => void connect()}
@@ -449,6 +508,7 @@ export default function Home() {
             snapshot={snapshot}
             connected={connected}
             compatibleBrowser={compatibleBrowser}
+            waitingForMouse={hidConnected && !mouseReady}
             busy={busy}
             onSelectProfile={(profile) => void selectProfile(profile)}
           />

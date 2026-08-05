@@ -58,6 +58,19 @@ test("keeps USB identities and capability limits in the mouse registry", async (
   assert.match(protocol, /listWebHidFilters\(A5_PRO_MAX_MODEL\)/);
 });
 
+test("keeps a sleeping wireless mouse attached through its receiver", async () => {
+  const [page, chrome, hero] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/driver/chrome.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/driver/mouse-hero.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /remains connected while the wireless mouse is asleep/);
+  assert.match(page, /window\.setInterval\(\(\) => void checkForWake\(\), 2500\)/);
+  assert.match(page, /await loadSnapshot\(protocol\)/);
+  assert.match(chrome, /mouse standby/);
+  assert.match(hero, /information will load automatically/);
+});
+
 test("ships the product and social-preview artwork", async () => {
   await Promise.all([
     access(new URL("../public/a5-mouse.png", import.meta.url)),

@@ -6,7 +6,8 @@ type TopBarProps = {
   model: MouseModelDefinition;
   device: A5HIDDevice | null;
   availableDevices: A5HIDDevice[];
-  connected: boolean;
+  hidConnected: boolean;
+  mouseReady: boolean;
   compatibleBrowser: boolean;
   busy: boolean;
   onConnect: () => void;
@@ -17,7 +18,8 @@ export function TopBar({
   model,
   device,
   availableDevices,
-  connected,
+  hidConnected,
+  mouseReady,
   compatibleBrowser,
   busy,
   onConnect,
@@ -52,12 +54,12 @@ export function TopBar({
             </select>
           </label>
         )}
-        <div className={`connection-pill ${connected ? "is-connected" : ""}`}>
+        <div className={`connection-pill ${mouseReady ? "is-connected" : hidConnected ? "is-standby" : ""}`}>
           <span className="status-dot" />
-          <span>{connected ? info?.transport : compatibleBrowser ? "Device offline" : "WebHID unavailable"}</span>
+          <span>{mouseReady ? info?.transport : hidConnected ? `${info?.transport} · mouse standby` : compatibleBrowser ? "Device offline" : "WebHID unavailable"}</span>
         </div>
-        <button className={connected ? "button ghost" : "button primary"} onClick={onConnect} disabled={busy}>
-          {connected ? "Add device" : "Connect device"}
+        <button className={hidConnected ? "button ghost" : "button primary"} onClick={onConnect} disabled={busy}>
+          {hidConnected ? "Add device" : "Connect device"}
         </button>
       </div>
     </header>

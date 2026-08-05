@@ -31,4 +31,6 @@ Use desktop Chrome or Edge over HTTPS or localhost. Firefox and Safari do not cu
 
 After a USB identity has been approved, the app discovers it with `navigator.hid.getDevices()` and listens for WebHID connect/disconnect events. It automatically restores an approved device, prefers wired when both wired and receiver are available, and falls back to the remaining receiver if the wired connection is removed.
 
+The receiver connection is kept open when the wireless mouse is switched off or asleep. In this state the app shows `mouse standby`, disables setting writes, and quietly checks for a response. Moving or waking the mouse triggers a full onboard-information refresh without requiring the Connect button again.
+
 For project-wide setup, deployment, protocol notes, and safety information, read the [repository documentation](../README.md).
