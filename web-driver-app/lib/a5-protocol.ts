@@ -115,6 +115,18 @@ function flattenCollections(collections: HidCollectionInfo[]): HidCollectionInfo
   ]);
 }
 
+function hasVendorFeatureCollection(device: A5HIDDevice) {
+  return flattenCollections(device.collections).some(
+    (collection) => collection.usagePage >= 0xff00 && (collection.featureReports?.length ?? 0) > 0,
+  );
+}
+
+const CONNECTION_PRIORITY: Record<number, number> = {
+  0xf019: 0,
+  0xf015: 1,
+  0xf013: 2,
+};
+
 export function isSupportedDevice(device: A5HIDDevice) {
   return (
     device.vendorId === MCHOSE_VENDOR_ID &&
@@ -144,6 +156,23 @@ export function productInfo(device: A5HIDDevice) {
   };
 }
 
+export function getDeviceKey(device: A5HIDDevice) {
+  return `${device.vendorId.toString(16)}:${device.productId.toString(16)}:${getReportId(device)}`;
+}
+
+export function sortA5Devices(devices: A5HIDDevice[]) {
+  const unique = Array.from(new Set(devices)).filter(isSupportedDevice);
+  return unique.sort((left, right) => {
+    const featureDifference = Number(!hasVendorFeatureCollection(left)) - Number(!hasVendorFeatureCollection(right));
+    if (featureDifference !== 0) return featureDifference;
+    return (CONNECTION_PRIORITY[left.productId] ?? 99) - (CONNECTION_PRIORITY[right.productId] ?? 99);
+  });
+}
+
+export function choosePreferredA5Device(devices: A5HIDDevice[]) {
+  return sortA5Devices(devices)[0] ?? null;
+}
+
 export async function requestA5Device(hid: HidApi) {
   const filters = (Object.keys(SUPPORTED_PRODUCTS) as unknown as ProductId[]).map((productId) => ({
     vendorId: MCHOSE_VENDOR_ID,
@@ -151,24 +180,15 @@ export async function requestA5Device(hid: HidApi) {
     usagePage: 0xffff,
   }));
   const selected = await hid.requestDevice({ filters });
-  const candidates = [...selected, ...(await hid.getDevices())].filter(isSupportedDevice);
-  const featureDevice = candidates.find((device) =>
-    flattenCollections(device.collections).some(
-      (collection) => collection.usagePage >= 0xff00 && (collection.featureReports?.length ?? 0) > 0,
-    ),
-  );
-  return featureDevice ?? candidates[0] ?? null;
+  return choosePreferredA5Device([...selected, ...(await hid.getDevices())]);
+}
+
+export async function findGrantedA5Devices(hid: HidApi) {
+  return sortA5Devices(await hid.getDevices());
 }
 
 export async function findGrantedA5Device(hid: HidApi) {
-  const devices = (await hid.getDevices()).filter(isSupportedDevice);
-  return (
-    devices.find((device) =>
-      flattenCollections(device.collections).some(
-        (collection) => collection.usagePage >= 0xff00 && (collection.featureReports?.length ?? 0) > 0,
-      ),
-    ) ?? devices[0] ?? null
-  );
+  return choosePreferredA5Device(await findGrantedA5Devices(hid));
 }
 
 function hex(value: number, width = 2) {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -28,7 +28,15 @@ test("server-renders the A5 Control product interface", async () => {
   assert.match(html, /FIRST-GENERATION HARDWARE/);
   assert.match(html, /Editable project introduction/);
   assert.match(html, /Add your hardware notes here/);
+  assert.match(html, /About me/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+});
+
+test("includes the multi-device manager and editable author section", async () => {
+  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(source, /CONNECTION MANAGER/);
+  assert.match(source, /Approve another device/);
+  assert.match(source, /ABOUT ME \/ PROJECT AUTHOR/);
 });
 
 test("ships the product and social-preview artwork", async () => {

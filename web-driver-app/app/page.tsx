@@ -6,19 +6,23 @@ import {
   A5Protocol,
   BUTTON_ACTIONS,
   BUTTONS,
-  findGrantedA5Device,
+  choosePreferredA5Device,
+  findGrantedA5Devices,
   getCollectionLabel,
+  getDeviceKey,
   type A5HIDDevice,
   type ButtonActionKey,
   type DeviceSnapshot,
   type NavigatorWithHid,
   productInfo,
   requestA5Device,
+  sortA5Devices,
   SUPPORTED_PRODUCTS,
 } from "../lib/a5-protocol";
+import { ABOUT_ME } from "../lib/about-content";
 import { HARDWARE_INTRO } from "../lib/hardware-content";
 
-type Tab = "performance" | "buttons" | "device";
+type Tab = "performance" | "buttons" | "device" | "about";
 type Toast = { id: number; kind: "success" | "error"; message: string };
 
 const DEFAULT_SNAPSHOT: DeviceSnapshot = {
@@ -49,6 +53,7 @@ const NAV_ITEMS: Array<{ id: Tab; index: string; label: string; note: string }> 
   { id: "performance", index: "01", label: "Performance", note: "DPI & sensor" },
   { id: "buttons", index: "02", label: "Buttons", note: "6 assignments" },
   { id: "device", index: "03", label: "Device", note: "Firmware & HID" },
+  { id: "about", index: "04", label: "About me", note: "Project & author" },
 ];
 
 const subscribeToHydration = () => () => undefined;
@@ -64,6 +69,7 @@ function formatError(error: unknown) {
 export default function Home() {
   const [tab, setTab] = useState<Tab>("performance");
   const [device, setDevice] = useState<A5HIDDevice | null>(null);
+  const [availableDevices, setAvailableDevices] = useState<A5HIDDevice[]>([]);
   const [snapshot, setSnapshot] = useState<DeviceSnapshot>(DEFAULT_SNAPSHOT);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("Reading onboard settings");
@@ -71,6 +77,8 @@ export default function Home() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [log, setLog] = useState<string[]>(["Ready — connect the mouse or receiver to begin."]);
   const protocolRef = useRef<A5Protocol | null>(null);
+  const activeDeviceRef = useRef<A5HIDDevice | null>(null);
+  const availableDevicesRef = useRef<A5HIDDevice[]>([]);
   const toastId = useRef(0);
 
   const browserReady = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
@@ -94,12 +102,34 @@ export default function Home() {
     window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), 4200);
   }, []);
 
+  const rememberDevices = useCallback((nextDevices: A5HIDDevice[]) => {
+    const sorted = sortA5Devices(nextDevices);
+    availableDevicesRef.current = sorted;
+    setAvailableDevices(sorted);
+    return sorted;
+  }, []);
+
   const loadSnapshot = useCallback(
     async (protocol: A5Protocol, profile?: number) => {
       setBusy(true);
       setBusyLabel(profile ? `Loading profile ${profile}` : "Reading onboard settings");
       try {
-        const next = await protocol.readSnapshot(profile);
+        let next = await protocol.readSnapshot(profile);
+        const receiver = protocol.device.productId === 0xf019
+          ? availableDevicesRef.current.find((entry) => entry.productId === 0xf013 || entry.productId === 0xf015)
+          : null;
+
+        if (receiver) {
+          try {
+            const receiverProtocol = new A5Protocol(receiver);
+            await receiverProtocol.open();
+            next = { ...next, dongleFirmware: await receiverProtocol.getFirmwareVersion(0) };
+            addLog(`${productInfo(receiver).transport} detected alongside the wired mouse.`);
+          } catch (error) {
+            addLog(`Receiver is present but its firmware read failed: ${formatError(error)}`);
+          }
+        }
+
         setSnapshot(next);
         setDpiDirty(false);
         addLog(`Profile ${next.profile} loaded from onboard memory.`);
@@ -111,27 +141,36 @@ export default function Home() {
   );
 
   const attachDevice = useCallback(
-    async (nextDevice: A5HIDDevice) => {
+    async (nextDevice: A5HIDDevice, notice = "A5 Pro Max connected — onboard settings loaded.") => {
+      const previousDevice = activeDeviceRef.current;
+      const previousProtocol = protocolRef.current;
       setBusy(true);
       setBusyLabel("Opening vendor HID channel");
       try {
         const protocol = new A5Protocol(nextDevice);
         await protocol.open();
         protocolRef.current = protocol;
+        activeDeviceRef.current = nextDevice;
         setDevice(nextDevice);
+        rememberDevices([...availableDevicesRef.current, nextDevice]);
         addLog(`${productInfo(nextDevice).transport} channel opened on report ${protocol.reportId}.`);
         await loadSnapshot(protocol);
-        notify("success", "A5 Pro Max connected — onboard settings loaded.");
+        notify("success", notice);
       } catch (error) {
-        protocolRef.current = null;
-        setDevice(null);
+        const canRestorePrevious = Boolean(
+          previousDevice && previousDevice !== nextDevice && previousDevice.opened && previousProtocol,
+        );
+        protocolRef.current = canRestorePrevious ? previousProtocol : null;
+        activeDeviceRef.current = canRestorePrevious ? previousDevice : null;
+        setDevice(canRestorePrevious ? previousDevice : null);
+        if (!canRestorePrevious) setSnapshot(DEFAULT_SNAPSHOT);
         const message = formatError(error);
         addLog(`Connection failed: ${message}`);
         notify("error", message);
         setBusy(false);
       }
     },
-    [addLog, loadSnapshot, notify],
+    [addLog, loadSnapshot, notify, rememberDevices],
   );
 
   const connect = useCallback(async () => {
@@ -144,47 +183,121 @@ export default function Home() {
       return;
     }
     try {
-      const nextDevice = await requestA5Device(hid);
-      if (!nextDevice) throw new Error("Choose the MCHOSE A5 vendor HID interface in the browser prompt.");
-      await attachDevice(nextDevice);
+      const selectedDevice = await requestA5Device(hid);
+      if (!selectedDevice) throw new Error("Choose the MCHOSE A5 vendor HID interface in the browser prompt.");
+      const granted = rememberDevices(await findGrantedA5Devices(hid));
+      const current = activeDeviceRef.current;
+      const currentAvailable = Boolean(current && granted.includes(current));
+      const preferred = choosePreferredA5Device(granted) ?? selectedDevice;
+      const shouldPreferWired = current?.productId !== 0xf019 && preferred.productId === 0xf019;
+
+      if (!currentAvailable || shouldPreferWired) {
+        await attachDevice(
+          preferred,
+          shouldPreferWired ? "Wired mouse detected — switched to the direct USB connection." : undefined,
+        );
+      } else {
+        notify("success", `${granted.length} approved connection${granted.length === 1 ? " is" : "s are"} available.`);
+      }
     } catch (error) {
       const message = formatError(error);
       if (message !== "No device was selected.") addLog(`Connection failed: ${message}`);
       notify("error", message);
     }
-  }, [addLog, attachDevice, hid, notify]);
+  }, [addLog, attachDevice, hid, notify, rememberDevices]);
 
   const disconnect = useCallback(async () => {
-    const current = device;
+    const devices = Array.from(new Set([...availableDevicesRef.current, activeDeviceRef.current].filter(Boolean))) as A5HIDDevice[];
     protocolRef.current = null;
+    activeDeviceRef.current = null;
     setDevice(null);
     setSnapshot(DEFAULT_SNAPSHOT);
-    if (current?.opened) await current.close().catch(() => undefined);
-    addLog("HID channel closed.");
-  }, [addLog, device]);
+    rememberDevices([]);
+    await Promise.all(devices.map((entry) => (entry.opened ? entry.close().catch(() => undefined) : Promise.resolve())));
+    addLog("All HID channels closed for this page session.");
+  }, [addLog, rememberDevices]);
+
+  const switchDevice = useCallback(
+    async (deviceKey: string) => {
+      const nextDevice = availableDevicesRef.current.find((entry) => getDeviceKey(entry) === deviceKey);
+      if (!nextDevice || nextDevice === activeDeviceRef.current) return;
+      await attachDevice(nextDevice, `Switched to ${productInfo(nextDevice).transport}.`);
+    },
+    [attachDevice],
+  );
 
   useEffect(() => {
     if (!hid || !globalThis.isSecureContext) return;
     let cancelled = false;
-    findGrantedA5Device(hid).then((granted) => {
-      if (!cancelled && granted) attachDevice(granted);
-    });
-    const onDisconnect = (event: Event) => {
-      const disconnected = (event as Event & { device?: A5HIDDevice }).device;
-      if (!disconnected || disconnected === protocolRef.current?.device) {
-        protocolRef.current = null;
-        setDevice(null);
-        setSnapshot(DEFAULT_SNAPSHOT);
-        addLog("Device disconnected.");
-        notify("error", "The mouse or receiver was disconnected.");
+
+    const synchronize = async (preferNewWired = false) => {
+      const granted = await findGrantedA5Devices(hid);
+      if (cancelled) return;
+      const sorted = rememberDevices(granted);
+      const current = activeDeviceRef.current;
+      const currentAvailable = Boolean(current && sorted.includes(current));
+      const preferred = choosePreferredA5Device(sorted);
+
+      if (!preferred) return;
+      if (!currentAvailable) {
+        await attachDevice(preferred, current ? `Reconnected through ${productInfo(preferred).transport}.` : "Approved A5 hardware reconnected automatically.");
+      } else if (preferNewWired && current?.productId !== 0xf019 && preferred.productId === 0xf019) {
+        await attachDevice(preferred, "Wired mouse detected — switched to the direct USB connection.");
       }
     };
+
+    const queueSynchronization = (preferNewWired = false) => {
+      void synchronize(preferNewWired).catch((error) => {
+        addLog(`Automatic connection check failed: ${formatError(error)}`);
+      });
+    };
+
+    queueSynchronization();
+
+    const onConnect = (event: Event) => {
+      const connectedDevice = (event as Event & { device?: A5HIDDevice }).device;
+      if (connectedDevice && connectedDevice.vendorId !== 0x2023) return;
+      addLog("USB connection detected. Checking approved A5 interfaces.");
+      queueSynchronization(true);
+    };
+
+    const onDisconnect = async (event: Event) => {
+      const disconnected = (event as Event & { device?: A5HIDDevice }).device;
+      const disconnectedKey = disconnected ? getDeviceKey(disconnected) : null;
+      const remaining = rememberDevices(
+        availableDevicesRef.current.filter((entry) => !disconnectedKey || getDeviceKey(entry) !== disconnectedKey),
+      );
+      const active = activeDeviceRef.current;
+      const activeWasDisconnected = Boolean(
+        active && (!disconnectedKey || getDeviceKey(active) === disconnectedKey),
+      );
+
+      if (!activeWasDisconnected) {
+        addLog(`${disconnected ? productInfo(disconnected).transport : "A secondary connection"} disconnected; active connection preserved.`);
+        return;
+      }
+
+      protocolRef.current = null;
+      activeDeviceRef.current = null;
+      setDevice(null);
+      setSnapshot(DEFAULT_SNAPSHOT);
+      addLog("Active device disconnected.");
+
+      const fallback = choosePreferredA5Device(remaining);
+      if (fallback) {
+        await attachDevice(fallback, `Active connection lost — switched to ${productInfo(fallback).transport}.`);
+      } else {
+        notify("error", "Device disconnected. Reconnect it and the approved interface will reopen automatically.");
+      }
+    };
+    hid.addEventListener("connect", onConnect);
     hid.addEventListener("disconnect", onDisconnect);
     return () => {
       cancelled = true;
+      hid.removeEventListener("connect", onConnect);
       hid.removeEventListener("disconnect", onDisconnect);
     };
-  }, [addLog, attachDevice, hid, notify]);
+  }, [addLog, attachDevice, hid, notify, rememberDevices]);
 
   const runSetting = useCallback(
     async (label: string, action: (protocol: A5Protocol) => Promise<void>) => {
@@ -282,12 +395,29 @@ export default function Home() {
           </span>
         </a>
         <div className="topbar-actions">
+          {availableDevices.length > 1 && device && (
+            <label className="connection-picker">
+              <span>Active connection</span>
+              <select
+                aria-label="Active device connection"
+                value={getDeviceKey(device)}
+                disabled={busy}
+                onChange={(event) => void switchDevice(event.target.value)}
+              >
+                {availableDevices.map((entry) => (
+                  <option value={getDeviceKey(entry)} key={getDeviceKey(entry)}>
+                    {productInfo(entry).transport}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className={`connection-pill ${connected ? "is-connected" : ""}`}>
             <span className="status-dot" />
             <span>{connected ? info?.transport : compatibleBrowser ? "Device offline" : "WebHID unavailable"}</span>
           </div>
-          <button className={connected ? "button ghost" : "button primary"} onClick={connected ? disconnect : connect} disabled={busy}>
-            {connected ? "Disconnect" : "Connect device"}
+          <button className={connected ? "button ghost" : "button primary"} onClick={connect} disabled={busy}>
+            {connected ? "Add device" : "Connect device"}
           </button>
         </div>
       </header>
@@ -453,12 +583,76 @@ export default function Home() {
 
           {tab === "device" && (
             <section className="tab-panel" aria-label="Device information">
-              <div className="section-heading"><div><span className="eyebrow">DEVICE / DIAGNOSTICS</span><h2>Hardware, plainly visible.</h2></div><button className="button ghost compact" disabled={!connected || busy} onClick={() => protocolRef.current && loadSnapshot(protocolRef.current)}>Refresh all</button></div>
+              <div className="section-heading">
+                <div><span className="eyebrow">DEVICE / DIAGNOSTICS</span><h2>Hardware, plainly visible.</h2></div>
+                <div className="section-actions">
+                  <button className="button ghost compact" disabled={!connected || busy} onClick={() => protocolRef.current && loadSnapshot(protocolRef.current)}>Refresh all</button>
+                  <button className="button ghost compact" disabled={!availableDevices.length || busy} onClick={disconnect}>Close session</button>
+                </div>
+              </div>
               <div className="device-grid">
                 <article className="device-card identity-card"><span className="eyebrow">CONNECTED HARDWARE</span><h3>{device?.productName || "MCHOSE A5 Pro Max"}</h3><dl><div><dt>Transport</dt><dd>{info?.transport ?? "—"}</dd></div><div><dt>USB identity</dt><dd>{device ? `2023:${device.productId.toString(16).toUpperCase().padStart(4, "0")}` : "2023:F019"}</dd></div><div><dt>Mouse firmware</dt><dd>{snapshot.firmware}</dd></div><div><dt>Receiver firmware</dt><dd>{snapshot.dongleFirmware ?? "Direct USB"}</dd></div><div><dt>Feature channel</dt><dd>{device ? getCollectionLabel(device) : "Usage FFFF:00 · report 0"}</dd></div></dl></article>
+                <article className="device-card connection-card">
+                  <span className="eyebrow">CONNECTION MANAGER</span>
+                  <h3>{availableDevices.length ? `${availableDevices.length} connection${availableDevices.length === 1 ? "" : "s"} ready` : "No approved device"}</h3>
+                  <p>Once a USB identity has been approved, Chrome or Edge can reopen it automatically after reconnection. A first-time identity still requires the browser&apos;s device prompt.</p>
+                  <div className="connection-options" aria-label="Available A5 connections">
+                    {availableDevices.map((entry) => {
+                      const active = entry === device;
+                      return (
+                        <button
+                          key={getDeviceKey(entry)}
+                          className={active ? "connection-option active" : "connection-option"}
+                          disabled={busy || active}
+                          onClick={() => void switchDevice(getDeviceKey(entry))}
+                        >
+                          <span><strong>{productInfo(entry).transport}</strong><small>2023:{entry.productId.toString(16).toUpperCase().padStart(4, "0")}</small></span>
+                          <b>{active ? "ACTIVE" : "USE"}</b>
+                        </button>
+                      );
+                    })}
+                    {!availableDevices.length && <div className="empty-connection">Connect the wired mouse or receiver to begin.</div>}
+                  </div>
+                  <button className="button ghost compact" onClick={connect} disabled={busy}>Approve another device</button>
+                  {availableDevices.length > 1 && <div className="multi-device-note">Wired is preferred for settings, while receiver firmware remains visible. If wired disconnects, the approved receiver becomes active automatically.</div>}
+                </article>
                 <article className="device-card support-card"><span className="eyebrow">SUPPORTED IDENTITIES</span><h3>First-gen A5 family</h3><div className="id-list">{supportedIdList.map((product) => <div key={product.id}><code>{product.id}</code><span><strong>{product.name}</strong><small>{product.transport}</small></span></div>)}</div></article>
                 <article className="device-card firmware-card"><span className="eyebrow">FIRMWARE SAFETY</span><h3>Updates stay on desktop.</h3><p>This web driver reads firmware versions but does not flash firmware. Use the supplied MCHOSE updater for recovery-capable updates and never disconnect during flashing.</p><div className="firmware-version"><span>Bundled package</span><strong>01.00.15.00</strong></div></article>
                 <article className="device-card log-card"><span className="eyebrow">SESSION LOG</span><h3>Feature report activity</h3><div className="log-window">{log.map((entry, index) => <div key={`${entry}-${index}`}><span>{String(log.length - index).padStart(2, "0")}</span><code>{entry}</code></div>)}</div></article>
+              </div>
+            </section>
+          )}
+
+          {tab === "about" && (
+            <section className="tab-panel" aria-label="About the project author">
+              <div className="section-heading">
+                <div><span className="eyebrow">ABOUT ME / PROJECT AUTHOR</span><h2>Built for hardware that still deserves support.</h2></div>
+                <p className="section-note">Edit this section in <code>lib/about-content.ts</code>.</p>
+              </div>
+              <div className="about-layout">
+                <article className="about-profile">
+                  <div className="about-monogram" aria-hidden="true">{ABOUT_ME.initials}</div>
+                  <div className="about-profile-copy">
+                    <span className="eyebrow">CREATOR</span>
+                    <h3>{ABOUT_ME.handle}</h3>
+                    <strong>{ABOUT_ME.role}</strong>
+                    <p>{ABOUT_ME.introduction}</p>
+                  </div>
+                </article>
+                <article className="about-project">
+                  <span className="eyebrow">WHY THIS EXISTS</span>
+                  <h3>Open compatibility work.</h3>
+                  <p>{ABOUT_ME.projectNote}</p>
+                  <div className="about-links">
+                    {ABOUT_ME.links.map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={link.href}>{link.label}<span>↗</span></a>)}
+                  </div>
+                </article>
+                <article className="about-principles">
+                  <span className="eyebrow">PROJECT PRINCIPLES</span>
+                  <div><strong>Local first</strong><p>Settings travel between this browser and the selected HID device.</p></div>
+                  <div><strong>Documented</strong><p>Hardware identities and command boundaries are recorded alongside the source.</p></div>
+                  <div><strong>Recovery aware</strong><p>Firmware flashing remains in the vendor updater, where recovery support exists.</p></div>
+                </article>
               </div>
             </section>
           )}
