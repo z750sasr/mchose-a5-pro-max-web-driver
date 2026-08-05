@@ -11,13 +11,19 @@ This directory contains the React WebHID interface and both supported build targ
 
 ## Main files
 
-- `app/page.tsx` — interface and device interactions
+- `app/page.tsx` — device-session controller and active driver assembly
 - `app/globals.css` — EPOMAKER-style charcoal/mint visual system
+- `components/driver/` — reusable navigation, hero, settings, device, and About sections
+- `lib/mouse-models/` — model definitions, USB identities, capabilities, and registry
 - `lib/a5-protocol.ts` — WebHID device selection and protocol implementation
 - `lib/hardware-content.ts` — editable top-of-page hardware introduction
 - `lib/about-content.ts` — editable About me section
 - `github/` and `vite.github.config.ts` — static GitHub Pages entry point
 - `public/` — mouse and social-preview artwork
+
+The UI receives its model name, artwork, USB identities, connection ordering, profile count, DPI limits, and polling-rate options from `lib/mouse-models/a5-pro-max.ts`. This keeps product data out of the reusable components and leaves the A5 command implementation isolated in its protocol adapter.
+
+To add another model, follow [Adding another MCHOSE mouse](../docs/ADDING-A-MOUSE.md). A new product needs both a model definition and a hardware-verified protocol adapter; registering a USB ID alone is not sufficient.
 
 ## Browser requirements
 

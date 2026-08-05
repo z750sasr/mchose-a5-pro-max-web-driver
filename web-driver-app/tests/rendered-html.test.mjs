@@ -32,16 +32,36 @@ test("server-renders the A5 Control product interface", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
-test("includes the multi-device manager and editable author section", async () => {
-  const source = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.match(source, /CONNECTION MANAGER/);
-  assert.match(source, /Approve another device/);
-  assert.match(source, /ABOUT ME \/ PROJECT AUTHOR/);
+test("assembles reusable driver sections from the active model", async () => {
+  const [page, devicePanel, aboutPanel] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/driver/device-panel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/driver/about-panel.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /DEFAULT_MOUSE_MODEL/);
+  assert.match(page, /<PerformancePanel/);
+  assert.match(page, /<DevicePanel/);
+  assert.match(devicePanel, /CONNECTION MANAGER/);
+  assert.match(devicePanel, /Approve another device/);
+  assert.match(aboutPanel, /ABOUT ME \/ PROJECT AUTHOR/);
+});
+
+test("keeps USB identities and capability limits in the mouse registry", async () => {
+  const [model, registry, protocol] = await Promise.all([
+    readFile(new URL("../lib/mouse-models/a5-pro-max.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/mouse-models/registry.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/a5-protocol.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(model, /0xf019/);
+  assert.match(model, /maxDpi: 26000/);
+  assert.match(registry, /MOUSE_MODEL_REGISTRY/);
+  assert.match(protocol, /listWebHidFilters\(A5_PRO_MAX_MODEL\)/);
 });
 
 test("ships the product and social-preview artwork", async () => {
   await Promise.all([
     access(new URL("../public/a5-mouse.png", import.meta.url)),
     access(new URL("../public/og-epomaker.png", import.meta.url)),
+    access(new URL("../../docs/ADDING-A-MOUSE.md", import.meta.url)),
   ]);
 });

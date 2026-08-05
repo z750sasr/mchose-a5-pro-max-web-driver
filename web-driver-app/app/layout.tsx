@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { DEFAULT_MOUSE_MODEL } from "../lib/mouse-models/registry";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -7,22 +8,24 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const base = new URL(`${protocol}://${host}`);
-  const title = "A5 Control — MCHOSE A5 Pro Max WebHID Driver";
-  const description = "Configure the first-generation MCHOSE A5 Pro Max directly in Chrome or Edge: DPI, polling, sensor settings, profiles, buttons, battery, and firmware.";
+  const model = DEFAULT_MOUSE_MODEL;
+  const appName = `${model.shortName} Control`;
+  const title = `${appName} — ${model.name} WebHID Driver`;
+  const description = `Configure the ${model.generation} ${model.name} directly in Chrome or Edge: DPI, polling, sensor settings, profiles, buttons, battery, and firmware.`;
   const image = new URL("/og-epomaker.png", base).toString();
 
   return {
     metadataBase: base,
     title,
     description,
-    applicationName: "A5 Control",
-    icons: { icon: "/a5-mouse.png", shortcut: "/a5-mouse.png" },
+    applicationName: appName,
+    icons: { icon: `/${model.artwork.src}`, shortcut: `/${model.artwork.src}` },
     openGraph: {
       type: "website",
       title,
       description,
-      siteName: "A5 Control",
-      images: [{ url: image, width: 1200, height: 630, alt: "A5 Control WebHID driver for the first-generation MCHOSE A5 Pro Max" }],
+      siteName: appName,
+      images: [{ url: image, width: 1200, height: 630, alt: `${appName} WebHID driver for ${model.name}` }],
     },
     twitter: { card: "summary_large_image", title, description, images: [image] },
   };

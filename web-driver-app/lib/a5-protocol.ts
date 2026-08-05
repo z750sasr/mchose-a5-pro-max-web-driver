@@ -1,10 +1,8 @@
-export const MCHOSE_VENDOR_ID = 0x2023;
+import { A5_PRO_MAX_CONNECTIONS, A5_PRO_MAX_MODEL } from "./mouse-models/a5-pro-max";
+import { listWebHidFilters } from "./mouse-models/registry";
 
-export const SUPPORTED_PRODUCTS = {
-  0xf019: { name: "MCHOSE A5 Pro Max", transport: "Wired" },
-  0xf013: { name: "MCHOSE 1K Receiver", transport: "2.4G · 1K receiver" },
-  0xf015: { name: "MCHOSE 4K Receiver", transport: "2.4G · 4K receiver" },
-} as const;
+export const MCHOSE_VENDOR_ID = A5_PRO_MAX_MODEL.vendorId;
+export const SUPPORTED_PRODUCTS = A5_PRO_MAX_CONNECTIONS;
 
 export type ProductId = keyof typeof SUPPORTED_PRODUCTS;
 
@@ -121,12 +119,6 @@ function hasVendorFeatureCollection(device: A5HIDDevice) {
   );
 }
 
-const CONNECTION_PRIORITY: Record<number, number> = {
-  0xf019: 0,
-  0xf015: 1,
-  0xf013: 2,
-};
-
 export function isSupportedDevice(device: A5HIDDevice) {
   return (
     device.vendorId === MCHOSE_VENDOR_ID &&
@@ -151,7 +143,7 @@ export function getCollectionLabel(device: A5HIDDevice) {
 
 export function productInfo(device: A5HIDDevice) {
   return SUPPORTED_PRODUCTS[device.productId as ProductId] ?? {
-    name: device.productName || "MCHOSE A5",
+    name: device.productName || A5_PRO_MAX_MODEL.name,
     transport: "USB HID",
   };
 }
@@ -165,7 +157,9 @@ export function sortA5Devices(devices: A5HIDDevice[]) {
   return unique.sort((left, right) => {
     const featureDifference = Number(!hasVendorFeatureCollection(left)) - Number(!hasVendorFeatureCollection(right));
     if (featureDifference !== 0) return featureDifference;
-    return (CONNECTION_PRIORITY[left.productId] ?? 99) - (CONNECTION_PRIORITY[right.productId] ?? 99);
+    const leftPriority = SUPPORTED_PRODUCTS[left.productId as ProductId]?.priority ?? 99;
+    const rightPriority = SUPPORTED_PRODUCTS[right.productId as ProductId]?.priority ?? 99;
+    return leftPriority - rightPriority;
   });
 }
 
@@ -174,12 +168,7 @@ export function choosePreferredA5Device(devices: A5HIDDevice[]) {
 }
 
 export async function requestA5Device(hid: HidApi) {
-  const filters = (Object.keys(SUPPORTED_PRODUCTS) as unknown as ProductId[]).map((productId) => ({
-    vendorId: MCHOSE_VENDOR_ID,
-    productId: Number(productId),
-    usagePage: 0xffff,
-  }));
-  const selected = await hid.requestDevice({ filters });
+  const selected = await hid.requestDevice({ filters: listWebHidFilters(A5_PRO_MAX_MODEL) });
   return choosePreferredA5Device([...selected, ...(await hid.getDevices())]);
 }
 
@@ -301,7 +290,7 @@ export class A5Protocol {
 
   async setPollingRate(rate: number) {
     const code = POLLING_CODES.get(rate);
-    if (!code) throw new Error("Unsupported polling rate for this first-generation A5 Pro Max.");
+    if (!code) throw new Error(`Unsupported polling rate for this ${A5_PRO_MAX_MODEL.name}.`);
     await this.command(1, 1, 0x00, [code]);
   }
 
@@ -314,9 +303,9 @@ export class A5Protocol {
   }
 
   async getDpi(profile: number) {
-    const stageResponse = await this.command(10, 1, 0x81, [profile, 6]);
+    const stageResponse = await this.command(10, 1, 0x81, [profile, A5_PRO_MAX_MODEL.capabilities.maxDpiStages]);
     const activeResponse = await this.command(2, 1, 0x82, [profile]);
-    const count = Math.max(1, Math.min(6, stageResponse[7] || 6));
+    const count = Math.max(1, Math.min(A5_PRO_MAX_MODEL.capabilities.maxDpiStages, stageResponse[7] || A5_PRO_MAX_MODEL.capabilities.maxDpiStages));
     const stages = Array.from({ length: count }, (_, index) => {
       const offset = 8 + index * 4;
       return ((stageResponse[offset] ?? 0) << 8) | (stageResponse[offset + 1] ?? 0);
@@ -328,8 +317,14 @@ export class A5Protocol {
   }
 
   async setDpi(profile: number, stages: number[], activeStage: number) {
-    const normalized = stages.slice(0, 6).map((value) =>
-      Math.max(50, Math.min(26000, Math.round(value / 50) * 50)),
+    const normalized = stages.slice(0, A5_PRO_MAX_MODEL.capabilities.maxDpiStages).map((value) =>
+      Math.max(
+        A5_PRO_MAX_MODEL.capabilities.dpiStep,
+        Math.min(
+          A5_PRO_MAX_MODEL.capabilities.maxDpi,
+          Math.round(value / A5_PRO_MAX_MODEL.capabilities.dpiStep) * A5_PRO_MAX_MODEL.capabilities.dpiStep,
+        ),
+      ),
     );
     const data = [profile, normalized.length];
     for (const dpi of normalized) data.push((dpi >> 8) & 0xff, dpi & 0xff, (dpi >> 8) & 0xff, dpi & 0xff);
@@ -377,7 +372,8 @@ export class A5Protocol {
 
   async readSnapshot(profileOverride?: number): Promise<DeviceSnapshot> {
     const firmware = await this.getFirmwareVersion();
-    const dongleFirmware = this.device.productId === 0xf019 ? null : await this.getFirmwareVersion(0);
+    const connection = A5_PRO_MAX_MODEL.connections.find((entry) => entry.productId === this.device.productId);
+    const dongleFirmware = connection?.kind === "wired" ? null : await this.getFirmwareVersion(0);
     const { battery, charging } = await this.getBattery();
     const profile = profileOverride ?? (await this.getProfile());
     const dpi = await this.getDpi(profile);
