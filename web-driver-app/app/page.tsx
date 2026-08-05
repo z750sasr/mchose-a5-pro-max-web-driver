@@ -1,6 +1,6 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   A5Protocol,
@@ -16,6 +16,7 @@ import {
   requestA5Device,
   SUPPORTED_PRODUCTS,
 } from "../lib/a5-protocol";
+import { HARDWARE_INTRO } from "../lib/hardware-content";
 
 type Tab = "performance" | "buttons" | "device";
 type Toast = { id: number; kind: "success" | "error"; message: string };
@@ -273,7 +274,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="A5 Control home">
+        <a className="brand" href="#hardware-notes" aria-label="A5 Control home">
           <span className="brand-mark">A5</span>
           <span>
             <strong>CONTROL</strong>
@@ -290,6 +291,25 @@ export default function Home() {
           </button>
         </div>
       </header>
+
+      <section className="hardware-intro" id="hardware-notes" aria-labelledby="hardware-intro-title">
+        <div className="hardware-intro-label">
+          <span className="eyebrow">{HARDWARE_INTRO.eyebrow}</span>
+          <small>Editable project introduction</small>
+        </div>
+        <div className="hardware-intro-copy">
+          <h2 id="hardware-intro-title">{HARDWARE_INTRO.title}</h2>
+          <p>{HARDWARE_INTRO.description}</p>
+        </div>
+        <dl className="hardware-facts">
+          {HARDWARE_INTRO.facts.map((fact) => (
+            <div key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section className="workspace" id="top">
         <aside className="sidebar" aria-label="Driver sections">
@@ -328,7 +348,7 @@ export default function Home() {
               <div className="orbit orbit-two" />
               <span className="axis axis-x" />
               <span className="axis axis-y" />
-              <Image src="/a5-mouse.png" alt="Black MCHOSE A5 Pro Max viewed from above" width={153} height={251} priority />
+              <img src="a5-mouse.png" alt="Black MCHOSE A5 Pro Max viewed from above" width="153" height="251" />
               <div className="mouse-callout top-callout"><span>PAW3395</span><small>SENSOR</small></div>
               <div className="mouse-callout bottom-callout"><span>58 G</span><small>WEIGHT</small></div>
             </div>
@@ -417,7 +437,7 @@ export default function Home() {
               <div className="button-layout">
                 <div className="button-mouse-map">
                   <div className="map-rings" />
-                  <Image src="/a5-mouse.png" alt="MCHOSE A5 Pro Max button map" width={153} height={251} />
+                  <img src="a5-mouse.png" alt="MCHOSE A5 Pro Max button map" width="153" height="251" />
                   <span className="map-pin pin-1">1</span><span className="map-pin pin-2">2</span><span className="map-pin pin-3">3</span><span className="map-pin pin-4">4</span><span className="map-pin pin-5">5</span><span className="map-pin pin-6">6</span>
                 </div>
                 <div className="assignment-list">

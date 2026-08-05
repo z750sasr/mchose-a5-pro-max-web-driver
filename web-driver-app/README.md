@@ -1,33 +1,25 @@
-# A5 Control
+# A5 Control web app
 
-A browser-based WebHID driver for the first-generation MCHOSE A5 Pro Max.
+This directory contains the React WebHID interface and both supported build targets:
 
-## Supported hardware
+- `npm run dev` / `npm run build`: vinext build used by the hosted preview
+- `npm run build:pages`: static Vite build for GitHub Pages
+- `npm run preview:pages`: local preview of the static GitHub Pages output
+- `npm run lint`: source linting
+- `npm run typecheck`: type-check the app and GitHub Pages entry point
+- `npm test`: vinext build plus rendered HTML tests
 
-- Wired mouse: `VID 2023 / PID F019`
-- 1K receiver: `VID 2023 / PID F013`
-- 4K receiver: `VID 2023 / PID F015`
-- Vendor configuration interface: `MI_02`, usage page `FFFF`, 64-byte feature reports
+## Main files
 
-## Features
+- `app/page.tsx` — interface and device interactions
+- `app/globals.css` — EPOMAKER-style charcoal/mint visual system
+- `lib/a5-protocol.ts` — WebHID device selection and protocol implementation
+- `lib/hardware-content.ts` — editable top-of-page hardware introduction
+- `github/` and `vite.github.config.ts` — static GitHub Pages entry point
+- `public/` — mouse and social-preview artwork
 
-- Three onboard profiles
-- Six DPI stages from 50–26,000 DPI, including stage colors and active-stage selection
-- 125 / 250 / 500 / 1000 Hz report rate, following the original model matrix
-- Debounce, lift-off distance, sleep timer, Motion Sync, ripple control, and angle snapping
-- Six-button remapping with a protected primary click
-- Battery, charging state, mouse firmware, and receiver firmware reads
-- Automatic reconnection to previously approved devices
+## Browser requirements
 
-Firmware flashing is intentionally not exposed through the browser. Use the supplied MCHOSE desktop updater for firmware updates.
+Use desktop Chrome or Edge over HTTPS or localhost. Firefox and Safari do not currently expose WebHID. The browser will ask the user to select a compatible HID interface; access is never automatic on first use.
 
-## Run locally
-
-Use a recent desktop version of Chrome or Edge. WebHID requires HTTPS or localhost.
-
-```sh
-npm install
-npm run dev
-```
-
-The app is built with vinext for Cloudflare Workers-compatible deployment.
+For project-wide setup, deployment, protocol notes, and safety information, read the [repository documentation](../README.md).

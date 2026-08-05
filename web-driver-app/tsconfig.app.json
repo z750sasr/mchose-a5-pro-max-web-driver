@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "lib/**/*.ts",
+    "github/**/*.tsx",
+    "vite.github.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "github-dist", ".next"]
+}

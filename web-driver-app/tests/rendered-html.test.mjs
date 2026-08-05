@@ -26,13 +26,14 @@ test("server-renders the A5 Control product interface", async () => {
   assert.match(html, /MCHOSE A5/);
   assert.match(html, /Connect device/);
   assert.match(html, /FIRST-GENERATION HARDWARE/);
+  assert.match(html, /Editable project introduction/);
+  assert.match(html, /Add your hardware notes here/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
 test("ships the product and social-preview artwork", async () => {
   await Promise.all([
     access(new URL("../public/a5-mouse.png", import.meta.url)),
-    access(new URL("../public/og.png", import.meta.url)),
+    access(new URL("../public/og-epomaker.png", import.meta.url)),
   ]);
 });
-

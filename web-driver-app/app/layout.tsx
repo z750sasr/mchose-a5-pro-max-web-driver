@@ -9,7 +9,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const base = new URL(`${protocol}://${host}`);
   const title = "A5 Control — MCHOSE A5 Pro Max WebHID Driver";
   const description = "Configure the first-generation MCHOSE A5 Pro Max directly in Chrome or Edge: DPI, polling, sensor settings, profiles, buttons, battery, and firmware.";
-  const image = new URL("/og.png", base).toString();
+  const image = new URL("/og-epomaker.png", base).toString();
 
   return {
     metadataBase: base,
@@ -31,4 +31,3 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body>{children}</body></html>;
 }
-

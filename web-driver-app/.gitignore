@@ -17,6 +17,7 @@
 /.next/
 /.vinext/
 /out/
+/github-dist/
 
 # misc
 .DS_Store
