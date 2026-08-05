@@ -17,7 +17,7 @@ import {
 } from "../lib/a5-protocol";
 import { AboutPanel } from "../components/driver/about-panel";
 import { ButtonsPanel } from "../components/driver/buttons-panel";
-import { DriverStatus, HardwareIntro, Sidebar, TopBar } from "../components/driver/chrome";
+import { DriverStatus, Sidebar, TopBar } from "../components/driver/chrome";
 import { DevicePanel } from "../components/driver/device-panel";
 import { MouseHero } from "../components/driver/mouse-hero";
 import { PerformancePanel, type SensorSetting } from "../components/driver/performance-panel";
