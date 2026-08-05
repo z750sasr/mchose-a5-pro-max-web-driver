@@ -1,8 +1,85 @@
-# A5 Control
+# An unofficial Web Driver for first generation, original MCHOSE A5 Pro Max
 
-A browser-only WebHID driver for the **first-generation MCHOSE A5 Pro Max**. It reads and writes the mouse's onboard settings directly from desktop Chrome or Edge, without installing a background driver or uploading device data.
+<table>
+  <tr>
+    <td rowspan="2" width="50%">
+      <img src="assets/web_screenshot.png" alt="MCHOSE A5 Pro Max Web Driver" width="100%">
+    </td>
+    <td width="25%">
+      <img src="assets/mchose-a5-pro-max-black.webp" alt="MCHOSE A5 Pro Max Black" width="100%">
+    </td>
+    <td width="25%">
+      <img src="assets/mchose-a5-pro-max-white.webp" alt="MCHOSE A5 Pro Max White" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="25%">
+      <img src="assets/mchose-a5-color-variant-1.webp" alt="MCHOSE A5 Color Variant 1" width="100%">
+    </td>
+    <td width="25%">
+      <img src="assets/mchose-a5-color-variant-2.jpg" alt="MCHOSE A5 Color Variant 2" width="100%">
+    </td>
+  </tr>
+</table>
 
-The interface uses the same charcoal, mint, mono-label, rounded-panel design language as the EPOMAKER HE30 web driver.
+
+
+## About This Project
+
+This is a **web-based driver for the first-generation MCHOSE A5 Pro Max, released in 2023**.
+
+I created this project primarily to prolong the useful life of the original A5 lineup. MCHOSE has effectively moved on from these models: information about the original A5 series has been removed from their current website, while newer mice have received web-driver support. The original A5, meanwhile, is still dependent on its older Windows desktop software.
+
+That raised a fairly simple question:
+
+**If newer MCHOSE mice can have a web driver, why can't the original A5?**
+
+So I built one.
+
+This project is also intended as a proof of concept. The original A5 hardware is perfectly capable of being controlled through a web application; the absence of an official web driver is not a fundamental technical limitation of the mouse.
+
+For preservation purposes, this repository also contains a copy of the **latest desktop driver and firmware** available for the first-generation A5 Pro Max. This is useful in case the original downloads eventually become unavailable.
+
+> [!NOTE]
+> This project is **unofficial** and is not affiliated with or endorsed by MCHOSE.
+
+## Support for Other Original A5 Variants
+
+Adding support for other variants of the first-generation A5 lineup should be relatively straightforward.
+
+The main limitation is hardware access.
+
+I currently only own the **A5 Pro Max V1**, so this is the only model I can safely test and verify. Other A5 variants use their own desktop driver executables and firmware files, which means I need access to those files—and ideally the corresponding hardware—to determine their device-specific commands and confirm that everything works correctly.
+
+If you own another original A5 variant and can provide its driver/firmware files or help test it, support for additional models can potentially be added.
+
+## MCHOSE A5 Pro Max V1 (2023) Specifications
+
+| Specification                     | Details                               |
+| --------------------------------- | ------------------------------------- |
+| **Controller**                    | Nordic nRF52840                       |
+| **Polling Rate — Wired**          | 1000 Hz                               |
+| **Polling Rate — 2.4 GHz**        | 1000 Hz with included receiver        |
+| **Maximum Wireless Polling Rate** | 4000 Hz with optional 4K receiver     |
+| **4K Receiver**                   | Not included; sold separately         |
+| **Weight**                        | 59 g mouse + approximately 1 g dongle |
+| **Battery**                       | 500 mAh                               |
+| **Connectivity**                  | Wired / 2.4 GHz Wireless / Bluetooth  |
+| **Switches**                      | Huano Blue Transparent Pink Dot       |
+
+### Available Colors
+
+* White, Black, Yellow, Berry Red
+
+---
+
+The goal of this repository is simple: **keep useful hardware useful instead of letting perfectly functional devices become obsolete because their software was left behind.**
+
+
+This is a browser-only WebHID driver, it reads and writes the mouse's onboard settings directly from desktop Chrome or Edge, without installing a background driver or uploading device data.
+
+> [!NOTE]
+> Firefox and Safari do not currently support WebHID.
 
 ## Supported hardware
 
@@ -14,7 +91,7 @@ The interface uses the same charcoal, mint, mono-label, rounded-panel design lan
 
 The app selects the vendor configuration collection on usage page `FFFF` and communicates with 64-byte HID feature reports.
 
-## Features
+## Web Driver Features
 
 - Three onboard profiles
 - Up to six DPI stages, stage colors, and active-stage selection
