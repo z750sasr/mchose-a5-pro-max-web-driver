@@ -16,14 +16,15 @@ This directory contains the React WebHID interface and both supported build targ
 - `components/driver/` — reusable navigation, hero, settings, device, and About sections
 - `lib/mouse-models/` — model definitions, USB identities, capabilities, and registry
 - `lib/a5-protocol.ts` — WebHID device selection and protocol implementation
-- `lib/hardware-content.ts` — editable top-of-page hardware introduction
-- `lib/about-content.ts` — editable About me section
+- `public/about-me.html` — blank, independent About me document for custom HTML and inline CSS
 - `github/` and `vite.github.config.ts` — static GitHub Pages entry point
 - `public/` — mouse and social-preview artwork
 
 The UI receives its model name, artwork, USB identities, connection ordering, profile count, DPI limits, and polling-rate options from `lib/mouse-models/a5-pro-max.ts`. This keeps product data out of the reusable components and leaves the A5 command implementation isolated in its protocol adapter.
 
 To add another model, follow [Adding another MCHOSE mouse](../docs/ADDING-A-MOUSE.md). A new product needs both a model definition and a hardware-verified protocol adapter; registering a USB ID alone is not sufficient.
+
+The About me tab loads `public/about-me.html` inside an isolated frame. Write ordinary HTML in its `<body>` and put CSS in the existing `<style>` block or directly in `style="..."` attributes. It intentionally contains no visible default profile content.
 
 ## Browser requirements
 

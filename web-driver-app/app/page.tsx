@@ -22,8 +22,6 @@ import { DevicePanel } from "../components/driver/device-panel";
 import { MouseHero } from "../components/driver/mouse-hero";
 import { PerformancePanel, type SensorSetting } from "../components/driver/performance-panel";
 import type { DriverTab, DriverToast } from "../components/driver/types";
-import { ABOUT_ME } from "../lib/about-content";
-import { HARDWARE_INTRO } from "../lib/hardware-content";
 import { DEFAULT_MOUSE_MODEL } from "../lib/mouse-models/registry";
 
 const MODEL = DEFAULT_MOUSE_MODEL;
@@ -497,8 +495,6 @@ export default function Home() {
         onSwitchDevice={(deviceKey) => void switchDevice(deviceKey)}
       />
 
-      <HardwareIntro content={HARDWARE_INTRO} />
-
       <section className="workspace" id="top">
         <Sidebar model={MODEL} tab={tab} onTabChange={setTab} />
 
@@ -563,7 +559,7 @@ export default function Home() {
           )}
 
           {tab === "about" && (
-            <AboutPanel content={ABOUT_ME} />
+            <AboutPanel />
           )}
         </div>
       </section>

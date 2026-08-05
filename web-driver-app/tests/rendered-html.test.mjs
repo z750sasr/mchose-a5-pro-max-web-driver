@@ -26,8 +26,6 @@ test("server-renders the A5 Control product interface", async () => {
   assert.match(html, /MCHOSE A5/);
   assert.match(html, /Connect device/);
   assert.match(html, /FIRST-GENERATION HARDWARE/);
-  assert.match(html, /Editable project introduction/);
-  assert.match(html, /Add your hardware notes here/);
   assert.match(html, /About me/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
@@ -43,7 +41,8 @@ test("assembles reusable driver sections from the active model", async () => {
   assert.match(page, /<DevicePanel/);
   assert.match(devicePanel, /CONNECTION MANAGER/);
   assert.match(devicePanel, /Approve another device/);
-  assert.match(aboutPanel, /ABOUT ME \/ PROJECT AUTHOR/);
+  assert.match(aboutPanel, /src="about-me\.html"/);
+  assert.match(aboutPanel, /sandbox=/);
 });
 
 test("keeps USB identities and capability limits in the mouse registry", async () => {
@@ -75,6 +74,15 @@ test("ships the product and social-preview artwork", async () => {
   await Promise.all([
     access(new URL("../public/a5-mouse.png", import.meta.url)),
     access(new URL("../public/og-epomaker.png", import.meta.url)),
+    access(new URL("../public/about-me.html", import.meta.url)),
     access(new URL("../../docs/ADDING-A-MOUSE.md", import.meta.url)),
   ]);
+});
+
+test("builds and uploads the generated GitHub Pages directory", async () => {
+  const workflow = await readFile(new URL("../../.github/workflows/deploy-pages.yml", import.meta.url), "utf8");
+  assert.match(workflow, /working-directory: web-driver-app/);
+  assert.match(workflow, /run: npm run build:pages/);
+  assert.match(workflow, /path: web-driver-app\/github-dist/);
+  assert.doesNotMatch(workflow, /path:\s*['"]?\.['"]?/);
 });
