@@ -65,8 +65,23 @@ export function PerformancePanel({
             <label><input type="number" min={model.capabilities.dpiStep} max={model.capabilities.maxDpi} step={model.capabilities.dpiStep} value={dpi} disabled={!connected} onChange={(event) => onUpdateDpi(index, Number(event.target.value))} /><small>DPI</small></label>
             <div className="dpi-card-foot">
               <input type="color" aria-label={`Stage ${index + 1} color`} value={snapshot.dpiColors[index]} disabled={!connected} onChange={(event) => onUpdateDpiColor(index, event.target.value)} />
-              <button onClick={() => onToggleDpiStage(index)} disabled={!connected || snapshot.dpiStages.length === 1}>REMOVE</button>
-            </div>
+<button 
+  onClick={() => onToggleDpiStage(index)} 
+  disabled={!connected || snapshot.dpiStages.length === 1}
+  style={{
+    border: '2px solid #ef4444',
+    color: '#dc2626',
+    backgroundColor: '#fef2f2',
+    padding: '6px 14px',
+    borderRadius: '6px',
+    fontWeight: '600',
+    cursor: (!connected || snapshot.dpiStages.length === 1) ? 'not-allowed' : 'pointer',
+    opacity: (!connected || snapshot.dpiStages.length === 1) ? 0.5 : 1,
+    transition: 'all 0.2s ease-in-out'
+  }}
+>
+  REMOVE
+</button>            </div>
           </article>
         ))}
         {snapshot.dpiStages.length < model.capabilities.maxDpiStages && <button className="add-stage" onClick={onAddDpiStage} disabled={!connected}><span>＋</span>Add stage</button>}
