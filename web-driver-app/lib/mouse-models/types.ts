@@ -9,6 +9,12 @@ export type MouseConnectionDefinition = {
   usagePage: number;
 };
 
+export type DpiLightingEffectDefinition = {
+  id: number;
+  label: string;
+  speedEnabled: boolean;
+};
+
 export type MouseModelDefinition = {
   id: string;
   manufacturer: "MCHOSE";
@@ -36,6 +42,16 @@ export type MouseModelDefinition = {
     maxDpiStages: number;
     pollingRates: readonly number[];
     wiredUnsupportedPollingRates: readonly number[];
+    dpiLighting: {
+      effects: readonly DpiLightingEffectDefinition[];
+      minSpeed: number;
+      maxSpeed: number;
+      movementControl: boolean;
+    };
+    receiverPairing: {
+      timeoutMs: number;
+    } | null;
+    profileReset: boolean;
   };
   connections: readonly MouseConnectionDefinition[];
 };

@@ -56,8 +56,16 @@ export type DeviceSnapshot = {
   activeDpiStage: number;
   dpiStages: number[];
   dpiColors: string[];
+  lightingEffect: number;
+  lightingSpeed: number;
+  lightingBrightness: number;
+  lightingOffWhileMoving: boolean;
   buttons: ButtonAssignment[];
 };
+
+export type PairingResult = "success" | "failed" | "timeout" | "cancelled";
+
+export type PairingProgress = "starting" | "waiting" | "success" | "failed";
 
 export type ButtonAssignment = {
   buttonId: number;
@@ -375,6 +383,89 @@ export class A5Protocol {
     await this.command(19, 2, 0x01, [profile, ...bytes]);
   }
 
+  private getLightingConnectionMode() {
+    const connection = A5_PRO_MAX_MODEL.connections.find(
+      (entry) => entry.productId === this.device.productId,
+    );
+    return connection?.kind === "wired" ? 1 : 0;
+  }
+
+  async getDpiLighting(profile: number) {
+    const [effectResponse, brightnessResponse, movementResponse] = await Promise.all([
+      this.command(5, 2, 0x80, [profile, 0, 0, 0, 0]),
+      this.command(3, 2, 0x82, [profile, this.getLightingConnectionMode(), 0]),
+      this.command(1, 2, 0x83),
+    ]);
+    const rawBrightness = brightnessResponse[8] ?? 255;
+    return {
+      effect: effectResponse[8] ?? 5,
+      speed: effectResponse[10] ?? 128,
+      brightness: Math.round((Math.max(0, Math.min(255, rawBrightness)) / 255) * 100),
+      offWhileMoving: (movementResponse[6] ?? 0) > 0,
+    };
+  }
+
+  async setDpiLightingEffect(profile: number, effect: number, speed: number) {
+    const normalizedSpeed = Math.max(0, Math.min(255, Math.round(speed)));
+    await this.command(5, 2, 0x00, [profile, 0xff, effect, 0, normalizedSpeed]);
+  }
+
+  async setDpiLightingBrightness(profile: number, brightness: number) {
+    const rawBrightness = Math.round(Math.max(0, Math.min(100, brightness)) * 2.55);
+    await this.command(3, 2, 0x02, [profile, this.getLightingConnectionMode(), rawBrightness]);
+  }
+
+  async setDpiLightingOffWhileMoving(enabled: boolean) {
+    await this.command(1, 2, 0x03, [enabled ? 1 : 0]);
+  }
+
+  async resetProfile(profile: number) {
+    await this.command(1, 0, 0x0d, [Math.max(1, Math.min(3, profile))]);
+  }
+
+  async setPairingState(enabled: boolean) {
+    await this.command(1, 0, 0x0c, [enabled ? 1 : 0], 1);
+  }
+
+  async getPairingStatus() {
+    return (await this.command(0, 0, 0x8c, [], 1))[6] ?? 0;
+  }
+
+  async pairReceiver({
+    signal,
+    timeoutMs = 30_000,
+    onProgress,
+  }: {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    onProgress?: (progress: PairingProgress) => void;
+  } = {}): Promise<PairingResult> {
+    const startedAt = Date.now();
+    onProgress?.("starting");
+    await this.setPairingState(true);
+
+    try {
+      onProgress?.("waiting");
+      while (Date.now() - startedAt < timeoutMs) {
+        if (signal?.aborted) return "cancelled";
+        await sleep(500);
+        if (signal?.aborted) return "cancelled";
+        const status = await this.getPairingStatus();
+        if (status === 2) {
+          onProgress?.("success");
+          return "success";
+        }
+        if (status === 3) {
+          onProgress?.("failed");
+          return "failed";
+        }
+      }
+      return "timeout";
+    } finally {
+      await this.setPairingState(false).catch(() => undefined);
+    }
+  }
+
   async getButton(profile: number, buttonId: number): Promise<ButtonAssignment> {
     const response = await this.command(15, 3, 0x80, [profile, buttonId, 0, 0xff, 10, ...Array(10).fill(0)]);
     const functionId = response[9] ?? 0;
@@ -403,6 +494,12 @@ export class A5Protocol {
     const profile = profileOverride ?? (await this.getProfile());
     const dpi = await this.getDpi(profile);
     const dpiColors = await this.getDpiColors(profile).catch(() => DEFAULT_COLORS);
+    const lighting = await this.getDpiLighting(profile).catch(() => ({
+      effect: 5,
+      speed: 128,
+      brightness: 100,
+      offWhileMoving: false,
+    }));
     const buttons: ButtonAssignment[] = [];
     for (const button of BUTTONS) buttons.push(await this.getButton(profile, button.id));
     return {
@@ -421,6 +518,10 @@ export class A5Protocol {
       activeDpiStage: dpi.activeStage,
       dpiStages: dpi.stages,
       dpiColors,
+      lightingEffect: lighting.effect,
+      lightingSpeed: lighting.speed,
+      lightingBrightness: lighting.brightness,
+      lightingOffWhileMoving: lighting.offWhileMoving,
       buttons,
     };
   }

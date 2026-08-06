@@ -21,7 +21,7 @@ import { DriverStatus, Sidebar, TopBar } from "../components/driver/chrome";
 import { DevicePanel } from "../components/driver/device-panel";
 import { MouseHero } from "../components/driver/mouse-hero";
 import { PerformancePanel, type SensorSetting } from "../components/driver/performance-panel";
-import type { DriverTab, DriverToast } from "../components/driver/types";
+import type { DriverTab, DriverToast, PairingUiState } from "../components/driver/types";
 import { DEFAULT_MOUSE_MODEL } from "../lib/mouse-models/registry";
 
 const MODEL = DEFAULT_MOUSE_MODEL;
@@ -42,6 +42,10 @@ const DEFAULT_SNAPSHOT: DeviceSnapshot = {
   activeDpiStage: 3,
   dpiStages: [400, 800, 1600, 3200, 6400, 12000],
   dpiColors: ["#ff3b30", "#3478f6", "#36d16f", "#f14cff", "#f3d43b", "#ffffff"],
+  lightingEffect: 5,
+  lightingSpeed: 128,
+  lightingBrightness: 100,
+  lightingOffWhileMoving: false,
   buttons: BUTTONS.map((button, index) => ({
     buttonId: button.id,
     functionId: 1,
@@ -77,12 +81,14 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("Reading onboard settings");
   const [dpiDirty, setDpiDirty] = useState(false);
+  const [pairingState, setPairingState] = useState<PairingUiState>("idle");
   const [toasts, setToasts] = useState<DriverToast[]>([]);
   const [log, setLog] = useState<string[]>(["Ready — connect the mouse or receiver to begin."]);
   const protocolRef = useRef<A5Protocol | null>(null);
   const activeDeviceRef = useRef<A5HIDDevice | null>(null);
   const availableDevicesRef = useRef<A5HIDDevice[]>([]);
   const mouseReadyRef = useRef(false);
+  const pairingAbortRef = useRef<AbortController | null>(null);
   const toastId = useRef(0);
 
   const browserReady = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
@@ -229,6 +235,9 @@ export default function Home() {
   }, [addLog, attachDevice, hid, notify, rememberDevices]);
 
   const disconnect = useCallback(async () => {
+    pairingAbortRef.current?.abort();
+    pairingAbortRef.current = null;
+    setPairingState("idle");
     const devices = Array.from(new Set([...availableDevicesRef.current, activeDeviceRef.current].filter(Boolean))) as A5HIDDevice[];
     protocolRef.current = null;
     activeDeviceRef.current = null;
@@ -508,6 +517,98 @@ export default function Home() {
     void runSetting(labels[setting], (protocol) => protocol.setSensorToggle(commands[setting], enabled));
   };
 
+  const setLightingEffect = (effect: number) => {
+    setSnapshot((current) => ({ ...current, lightingEffect: effect }));
+    void runSetting("DPI LED effect", (protocol) =>
+      protocol.setDpiLightingEffect(snapshot.profile, effect, snapshot.lightingSpeed),
+    );
+  };
+
+  const setLightingOffWhileMoving = (enabled: boolean) => {
+    setSnapshot((current) => ({ ...current, lightingOffWhileMoving: enabled }));
+    void runSetting("DPI LED movement behavior", (protocol) =>
+      protocol.setDpiLightingOffWhileMoving(enabled),
+    );
+  };
+
+  const resetCurrentProfile = async () => {
+    const protocol = protocolRef.current;
+    if (!protocol) return;
+    const profile = snapshot.profile;
+    const confirmed = window.confirm(
+      `Restore onboard profile ${profile} to the MCHOSE default settings?\n\nThis replaces its DPI, lighting, sensor, and button settings and cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    setBusyLabel(`Restoring profile ${profile} defaults`);
+    try {
+      await protocol.resetProfile(profile);
+      await new Promise((resolve) => window.setTimeout(resolve, 600));
+      await loadSnapshot(protocol, profile);
+      addLog(`Profile ${profile} restored with the stock onboard reset command.`);
+      notify("success", `Profile ${profile} defaults restored.`);
+    } catch (error) {
+      const message = formatError(error);
+      addLog(`Profile reset failed: ${message}`);
+      notify("error", message);
+      setBusy(false);
+    }
+  };
+
+  const startPairing = async () => {
+    const pairingCapability = MODEL.capabilities.receiverPairing;
+    const receiver = availableDevicesRef.current.find(
+      (entry) => connectionFor(entry)?.kind === "receiver",
+    );
+    if (!pairingCapability || !receiver) {
+      notify("error", "Approve and connect an A5 receiver before starting pairing.");
+      return;
+    }
+
+    const controller = new AbortController();
+    pairingAbortRef.current = controller;
+    setBusy(true);
+    setBusyLabel("Pairing the 2.4G receiver");
+    setPairingState("starting");
+    addLog(`Pairing started on ${productInfo(receiver).transport}.`);
+
+    try {
+      const pairingProtocol = receiver === activeDeviceRef.current && protocolRef.current
+        ? protocolRef.current
+        : new A5Protocol(receiver);
+      await pairingProtocol.open();
+      const result = await pairingProtocol.pairReceiver({
+        signal: controller.signal,
+        timeoutMs: pairingCapability.timeoutMs,
+        onProgress: setPairingState,
+      });
+      setPairingState(result);
+      if (result === "success") {
+        addLog("Receiver reported a successful mouse pairing.");
+        notify("success", "Dongle pairing completed.");
+      } else if (result === "cancelled") {
+        addLog("Dongle pairing cancelled; receiver pairing mode stopped.");
+      } else {
+        addLog(`Dongle pairing ended with status: ${result}.`);
+        notify("error", result === "timeout" ? "Pairing timed out after 30 seconds." : "The receiver could not pair with the mouse.");
+      }
+    } catch (error) {
+      const message = formatError(error);
+      setPairingState(controller.signal.aborted ? "cancelled" : "failed");
+      addLog(`Dongle pairing failed: ${message}`);
+      if (!controller.signal.aborted) notify("error", message);
+    } finally {
+      if (pairingAbortRef.current === controller) pairingAbortRef.current = null;
+      setBusy(false);
+    }
+  };
+
+  const cancelPairing = () => {
+    pairingAbortRef.current?.abort();
+    setPairingState("cancelled");
+  };
+
   const setButtonAssignment = (buttonId: number, label: string, key: ButtonActionKey) => {
     setSnapshot((current) => ({
       ...current,
@@ -564,6 +665,12 @@ export default function Home() {
               onSetLiftOffDistance={setLiftOffDistance}
               onSetSleepSeconds={setSleepSeconds}
               onSetSensorSetting={setSensorSetting}
+              onSetLightingEffect={setLightingEffect}
+              onPreviewLightingSpeed={(speed) => setSnapshot((current) => ({ ...current, lightingSpeed: speed }))}
+              onCommitLightingSpeed={() => void runSetting("DPI LED speed", (protocol) => protocol.setDpiLightingEffect(snapshot.profile, snapshot.lightingEffect, snapshot.lightingSpeed))}
+              onPreviewLightingBrightness={(brightness) => setSnapshot((current) => ({ ...current, lightingBrightness: brightness }))}
+              onCommitLightingBrightness={() => void runSetting("DPI LED brightness", (protocol) => protocol.setDpiLightingBrightness(snapshot.profile, snapshot.lightingBrightness))}
+              onSetLightingOffWhileMoving={setLightingOffWhileMoving}
             />
           )}
 
@@ -590,6 +697,10 @@ export default function Home() {
               onDisconnect={() => void disconnect()}
               onConnect={() => void connect()}
               onSwitchDevice={(deviceKey) => void switchDevice(deviceKey)}
+              pairingState={pairingState}
+              onStartPairing={() => void startPairing()}
+              onCancelPairing={cancelPairing}
+              onResetProfile={() => void resetCurrentProfile()}
             />
           )}
 

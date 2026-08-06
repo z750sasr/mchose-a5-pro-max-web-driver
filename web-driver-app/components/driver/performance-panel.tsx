@@ -1,5 +1,6 @@
 import type { DeviceSnapshot } from "../../lib/a5-protocol";
 import type { MouseModelDefinition } from "../../lib/mouse-models/types";
+import { DpiLightingCard } from "./dpi-lighting-card";
 
 export type SensorSetting = "motionSync" | "rippleControl" | "angleSnap";
 
@@ -22,6 +23,12 @@ type PerformancePanelProps = {
   onSetLiftOffDistance: (distance: number) => void;
   onSetSleepSeconds: (seconds: number) => void;
   onSetSensorSetting: (setting: SensorSetting, enabled: boolean) => void;
+  onSetLightingEffect: (effect: number) => void;
+  onPreviewLightingSpeed: (speed: number) => void;
+  onCommitLightingSpeed: () => void;
+  onPreviewLightingBrightness: (brightness: number) => void;
+  onCommitLightingBrightness: () => void;
+  onSetLightingOffWhileMoving: (enabled: boolean) => void;
 };
 
 export function PerformancePanel({
@@ -43,6 +50,12 @@ export function PerformancePanel({
   onSetLiftOffDistance,
   onSetSleepSeconds,
   onSetSensorSetting,
+  onSetLightingEffect,
+  onPreviewLightingSpeed,
+  onCommitLightingSpeed,
+  onPreviewLightingBrightness,
+  onCommitLightingBrightness,
+  onSetLightingOffWhileMoving,
 }: PerformancePanelProps) {
   const activeConnection = model.connections.find((connection) => connection.productId === activeProductId);
   const unavailablePollingRates = activeConnection?.kind === "wired"
@@ -65,23 +78,8 @@ export function PerformancePanel({
             <label><input type="number" min={model.capabilities.dpiStep} max={model.capabilities.maxDpi} step={model.capabilities.dpiStep} value={dpi} disabled={!connected} onChange={(event) => onUpdateDpi(index, Number(event.target.value))} /><small>DPI</small></label>
             <div className="dpi-card-foot">
               <input type="color" aria-label={`Stage ${index + 1} color`} value={snapshot.dpiColors[index]} disabled={!connected} onChange={(event) => onUpdateDpiColor(index, event.target.value)} />
-<button 
-  onClick={() => onToggleDpiStage(index)} 
-  disabled={!connected || snapshot.dpiStages.length === 1}
-  style={{
-    border: '2px solid #ef4444',
-    color: '#dc2626',
-    backgroundColor: '#fef2f2',
-    padding: '6px 14px',
-    borderRadius: '6px',
-    fontWeight: '600',
-    cursor: (!connected || snapshot.dpiStages.length === 1) ? 'not-allowed' : 'pointer',
-    opacity: (!connected || snapshot.dpiStages.length === 1) ? 0.5 : 1,
-    transition: 'all 0.2s ease-in-out'
-  }}
->
-  REMOVE
-</button>            </div>
+              <button className="remove-stage" onClick={() => onToggleDpiStage(index)} disabled={!connected || snapshot.dpiStages.length === 1}>REMOVE</button>
+            </div>
           </article>
         ))}
         {snapshot.dpiStages.length < model.capabilities.maxDpiStages && <button className="add-stage" onClick={onAddDpiStage} disabled={!connected}><span>＋</span>Add stage</button>}
@@ -122,6 +120,19 @@ export function PerformancePanel({
             <Toggle label="Angle Snapping" description="Straighten near-horizontal movement." enabled={snapshot.angleSnap} disabled={!connected || busy} onChange={(enabled) => onSetSensorSetting("angleSnap", enabled)} />
           </div>
         </article>
+
+        <DpiLightingCard
+          model={model}
+          snapshot={snapshot}
+          connected={connected}
+          busy={busy}
+          onSetEffect={onSetLightingEffect}
+          onPreviewSpeed={onPreviewLightingSpeed}
+          onCommitSpeed={onCommitLightingSpeed}
+          onPreviewBrightness={onPreviewLightingBrightness}
+          onCommitBrightness={onCommitLightingBrightness}
+          onSetOffWhileMoving={onSetLightingOffWhileMoving}
+        />
       </div>
     </section>
   );

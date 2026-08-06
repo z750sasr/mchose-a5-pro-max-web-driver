@@ -40,4 +40,8 @@ The receiver connection is kept open when the wireless mouse is switched off or 
 
 While the mouse is active, the app periodically reads the lightweight onboard active-DPI value. Pressing the physical DPI-cycle button therefore moves the highlighted DPI card without reloading the full settings snapshot.
 
+The Performance section includes model-defined DPI lighting controls. The Device section contains receiver pairing and a confirmed per-profile default restore. Pairing always uses an approved receiver identity, even when the wired mouse remains the preferred settings connection.
+
+The stock macro editor records input on Windows but uploads the resulting event stream to onboard macro storage; playback does not require the desktop driver to remain open. Macro uploads are intentionally withheld until the event encoding has physical readback tests. See [Macro and key-binding findings](../docs/MACROS.md).
+
 For project-wide setup, deployment, protocol notes, and safety information, read the [repository documentation](../README.md).

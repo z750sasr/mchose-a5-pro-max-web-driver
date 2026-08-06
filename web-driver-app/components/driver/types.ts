@@ -6,6 +6,8 @@ export type DriverToast = {
   message: string;
 };
 
+export type PairingUiState = "idle" | "starting" | "waiting" | "success" | "failed" | "timeout" | "cancelled";
+
 export const DRIVER_NAV_ITEMS: ReadonlyArray<{
   id: DriverTab;
   index: string;

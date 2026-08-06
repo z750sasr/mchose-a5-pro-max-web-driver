@@ -55,6 +55,20 @@ export const A5_PRO_MAX_MODEL: MouseModelDefinition = {
     maxDpiStages: 6,
     pollingRates: [125, 250, 500, 1000],
     wiredUnsupportedPollingRates: [250],
+    dpiLighting: {
+      effects: [
+        { id: 5, label: "Solid", speedEnabled: false },
+        { id: 4, label: "Breathing", speedEnabled: true },
+        { id: 0, label: "Off", speedEnabled: false },
+      ],
+      minSpeed: 0,
+      maxSpeed: 255,
+      movementControl: true,
+    },
+    receiverPairing: {
+      timeoutMs: 30_000,
+    },
+    profileReset: true,
   },
   connections: Object.values(A5_PRO_MAX_CONNECTIONS),
 };

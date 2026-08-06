@@ -97,11 +97,14 @@ The app selects the vendor configuration collection on usage page `FFFF` and com
 
 - Three onboard profiles
 - Up to six DPI stages, stage colors, and active-stage selection
+- DPI LED solid, breathing, off, brightness, speed, and movement behavior
 - 125, 250, 500, and 1000 Hz report rates, subject to connection support
 - Debounce, lift-off distance, sleep timer, Motion Sync, ripple control, and angle snapping
 - Six button assignments with primary-click protection
 - Battery, charging state, mouse firmware, and receiver firmware reads
 - Automatic reconnection to a device that the browser has already approved
+- Receiver pairing with progress, timeout, and cancellation
+- Confirmed restore-defaults action for the current onboard profile
 
 Firmware flashing is deliberately excluded. Use the supplied MCHOSE desktop updater for firmware and recovery operations.
 
@@ -141,6 +144,7 @@ npm run preview:pages
 - [Hardware support and editable intro](docs/HARDWARE.md)
 - [GitHub Pages and other deployment options](docs/DEPLOYMENT.md)
 - [WebHID protocol notes](docs/PROTOCOL.md)
+- [Stock-driver macro and key-binding findings](docs/MACROS.md)
 - [App-specific development notes](web-driver-app/README.md)
 
 ## Safety and privacy

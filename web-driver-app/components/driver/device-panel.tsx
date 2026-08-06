@@ -6,6 +6,8 @@ import {
   type DeviceSnapshot,
 } from "../../lib/a5-protocol";
 import type { MouseModelDefinition } from "../../lib/mouse-models/types";
+import { DeviceActions } from "./device-actions";
+import type { PairingUiState } from "./types";
 
 function hexId(value: number) {
   return value.toString(16).toUpperCase().padStart(4, "0");
@@ -23,6 +25,10 @@ export function DevicePanel({
   onDisconnect,
   onConnect,
   onSwitchDevice,
+  pairingState,
+  onStartPairing,
+  onCancelPairing,
+  onResetProfile,
 }: {
   model: MouseModelDefinition;
   device: A5HIDDevice | null;
@@ -35,10 +41,17 @@ export function DevicePanel({
   onDisconnect: () => void;
   onConnect: () => void;
   onSwitchDevice: (deviceKey: string) => void;
+  pairingState: PairingUiState;
+  onStartPairing: () => void;
+  onCancelPairing: () => void;
+  onResetProfile: () => void;
 }) {
   const info = device ? productInfo(device) : null;
   const primaryConnection = model.connections[0];
   const vendorId = hexId(model.vendorId);
+  const hasReceiver = availableDevices.some((entry) =>
+    model.connections.some((connection) => connection.productId === entry.productId && connection.kind === "receiver"),
+  );
 
   return (
     <section className="tab-panel" aria-label="Device information">
@@ -106,6 +119,18 @@ export function DevicePanel({
           <p>This web driver reads firmware versions but does not flash firmware. Use the supplied MCHOSE updater for recovery-capable updates and never disconnect during flashing.</p>
           <div className="firmware-version"><span>Bundled package</span><strong>{model.firmwarePackage}</strong></div>
         </article>
+
+        <DeviceActions
+          profile={snapshot.profile}
+          hasReceiver={hasReceiver}
+          connected={connected}
+          busy={busy}
+          pairingState={pairingState}
+          canResetProfile={model.capabilities.profileReset}
+          onStartPairing={onStartPairing}
+          onCancelPairing={onCancelPairing}
+          onResetProfile={onResetProfile}
+        />
 
         <article className="device-card log-card">
           <span className="eyebrow">SESSION LOG</span>

@@ -86,6 +86,36 @@ test("deduplicates browser HID objects and follows the physical DPI button", asy
   assert.match(page, /window\.setInterval\(\(\) => void synchronizeActiveDpi\(\), 700\)/);
 });
 
+test("implements model-scoped lighting, profile reset, and bounded receiver pairing", async () => {
+  const [model, protocol, lightingCard, deviceActions, page] = await Promise.all([
+    readFile(new URL("../lib/mouse-models/a5-pro-max.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/a5-protocol.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/driver/dpi-lighting-card.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/driver/device-actions.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(model, /dpiLighting:/);
+  assert.match(model, /receiverPairing:/);
+  assert.match(protocol, /setDpiLightingEffect/);
+  assert.match(protocol, /resetProfile/);
+  assert.match(protocol, /pairReceiver/);
+  assert.match(protocol, /status === 2/);
+  assert.match(protocol, /setPairingState\(false\)/);
+  assert.match(lightingCard, /DPI LED EFFECT/);
+  assert.match(deviceActions, /DONGLE PAIRING/);
+  assert.match(deviceActions, /Restore profile defaults/);
+  assert.match(page, /window\.confirm/);
+  assert.match(page, /connectionFor\(entry\)\?\.kind === "receiver"/);
+});
+
+test("documents onboard macros and rejects an unsupported WebHID chord", async () => {
+  const macroReport = await readFile(new URL("../../docs/MACROS.md", import.meta.url), "utf8");
+  assert.match(macroReport, /hardware-sided\/onboard macros/i);
+  assert.match(macroReport, /five-byte record/i);
+  assert.match(macroReport, /page `04`/i);
+  assert.match(macroReport, /not with the stock firmware and not from a WebHID page alone/i);
+});
+
 test("ships the product and social-preview artwork", async () => {
   await Promise.all([
     access(new URL("../public/a5-mouse.png", import.meta.url)),
