@@ -358,6 +358,41 @@ export default function Home() {
     };
   }, [addLog, busy, device, hidConnected, loadSnapshot, mouseReady, notify]);
 
+  useEffect(() => {
+    if (!connected || busy || dpiDirty || !device) return;
+
+    let stopped = false;
+    let checking = false;
+    const synchronizeActiveDpi = async () => {
+      const protocol = protocolRef.current;
+      if (checking || !protocol || activeDeviceRef.current !== device) return;
+      checking = true;
+      try {
+        const activeStage = await protocol.getActiveDpiStage(snapshot.profile);
+        if (stopped || activeDeviceRef.current !== device) return;
+        setSnapshot((current) => {
+          const normalizedStage = Math.max(1, Math.min(current.dpiStages.length, activeStage));
+          return normalizedStage === current.activeDpiStage
+            ? current
+            : { ...current, activeDpiStage: normalizedStage };
+        });
+      } catch {
+        // The mouse may briefly stop answering while it sleeps. The receiver
+        // session remains open and the next interval checks again.
+      } finally {
+        checking = false;
+      }
+    };
+
+    const firstCheck = window.setTimeout(() => void synchronizeActiveDpi(), 500);
+    const interval = window.setInterval(() => void synchronizeActiveDpi(), 700);
+    return () => {
+      stopped = true;
+      window.clearTimeout(firstCheck);
+      window.clearInterval(interval);
+    };
+  }, [busy, connected, device, dpiDirty, snapshot.profile]);
+
   const runSetting = useCallback(
     async (label: string, action: (protocol: A5Protocol) => Promise<void>) => {
       const protocol = protocolRef.current;

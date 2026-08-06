@@ -70,6 +70,19 @@ test("keeps a sleeping wireless mouse attached through its receiver", async () =
   assert.match(hero, /information will load automatically/);
 });
 
+test("deduplicates browser HID objects and follows the physical DPI button", async () => {
+  const [page, protocol] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/a5-protocol.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(protocol, /new Map<string, A5HIDDevice>\(\)/);
+  assert.match(protocol, /if \(!logicalConnections\.has\(key\)\)/);
+  assert.match(protocol, /getActiveDpiStage\(profile: number\)/);
+  assert.match(protocol, /private commandQueue: Promise<void>/);
+  assert.match(page, /protocol\.getActiveDpiStage\(snapshot\.profile\)/);
+  assert.match(page, /window\.setInterval\(\(\) => void synchronizeActiveDpi\(\), 700\)/);
+});
+
 test("ships the product and social-preview artwork", async () => {
   await Promise.all([
     access(new URL("../public/a5-mouse.png", import.meta.url)),

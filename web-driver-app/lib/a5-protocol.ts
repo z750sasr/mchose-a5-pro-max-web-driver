@@ -149,18 +149,25 @@ export function productInfo(device: A5HIDDevice) {
 }
 
 export function getDeviceKey(device: A5HIDDevice) {
-  return `${device.vendorId.toString(16)}:${device.productId.toString(16)}:${getReportId(device)}`;
+  return `${device.vendorId.toString(16)}:${device.productId.toString(16)}`;
 }
 
 export function sortA5Devices(devices: A5HIDDevice[]) {
-  const unique = Array.from(new Set(devices)).filter(isSupportedDevice);
-  return unique.sort((left, right) => {
+  const candidates = Array.from(new Set(devices)).filter(isSupportedDevice);
+  candidates.sort((left, right) => {
     const featureDifference = Number(!hasVendorFeatureCollection(left)) - Number(!hasVendorFeatureCollection(right));
     if (featureDifference !== 0) return featureDifference;
     const leftPriority = SUPPORTED_PRODUCTS[left.productId as ProductId]?.priority ?? 99;
     const rightPriority = SUPPORTED_PRODUCTS[right.productId as ProductId]?.priority ?? 99;
     return leftPriority - rightPriority;
   });
+
+  const logicalConnections = new Map<string, A5HIDDevice>();
+  for (const candidate of candidates) {
+    const key = getDeviceKey(candidate);
+    if (!logicalConnections.has(key)) logicalConnections.set(key, candidate);
+  }
+  return Array.from(logicalConnections.values());
 }
 
 export function choosePreferredA5Device(devices: A5HIDDevice[]) {
@@ -190,6 +197,7 @@ function sleep(ms: number) {
 
 export class A5Protocol {
   readonly reportId: number;
+  private commandQueue: Promise<void> = Promise.resolve();
 
   constructor(readonly device: A5HIDDevice) {
     this.reportId = getReportId(device);
@@ -205,7 +213,19 @@ export class A5Protocol {
     return bytes.length === 65 && bytes[0] === this.reportId ? bytes.slice(1) : bytes;
   }
 
-  private async command(
+  private command(
+    length: number,
+    page: number,
+    command: number,
+    data: number[] = [],
+    route = 2,
+  ) {
+    const operation = this.commandQueue.then(() => this.executeCommand(length, page, command, data, route));
+    this.commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+
+  private async executeCommand(
     length: number,
     page: number,
     command: number,
@@ -304,16 +324,21 @@ export class A5Protocol {
 
   async getDpi(profile: number) {
     const stageResponse = await this.command(10, 1, 0x81, [profile, A5_PRO_MAX_MODEL.capabilities.maxDpiStages]);
-    const activeResponse = await this.command(2, 1, 0x82, [profile]);
     const count = Math.max(1, Math.min(A5_PRO_MAX_MODEL.capabilities.maxDpiStages, stageResponse[7] || A5_PRO_MAX_MODEL.capabilities.maxDpiStages));
     const stages = Array.from({ length: count }, (_, index) => {
       const offset = 8 + index * 4;
       return ((stageResponse[offset] ?? 0) << 8) | (stageResponse[offset + 1] ?? 0);
     }).filter((value) => value >= 50);
+    const activeStage = await this.getActiveDpiStage(profile);
     return {
-      activeStage: Math.max(1, Math.min(count, activeResponse[7] || 1)),
+      activeStage: Math.max(1, Math.min(count, activeStage)),
       stages: stages.length ? stages : DEFAULT_DPI,
     };
+  }
+
+  async getActiveDpiStage(profile: number) {
+    const response = await this.command(2, 1, 0x82, [profile]);
+    return response[7] || 1;
   }
 
   async setDpi(profile: number, stages: number[], activeStage: number) {
