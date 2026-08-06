@@ -27,6 +27,9 @@ test("server-renders the A5 Control product interface", async () => {
   assert.match(html, /Connect device/);
   assert.match(html, /FIRST-GENERATION HARDWARE/);
   assert.match(html, /About me/);
+  assert.match(html, /MCHOSE A5 Pro Max Driver/);
+  assert.match(html, /rel="canonical" href="https:\/\/z750sasr\.github\.io\/mchose-a5-pro-max-web-driver\/"/);
+  assert.match(html, /application\/ld\+json/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
 });
 
@@ -98,4 +101,29 @@ test("builds and uploads the generated GitHub Pages directory", async () => {
   assert.match(workflow, /run: npm run build:pages/);
   assert.match(workflow, /path: web-driver-app\/github-dist/);
   assert.doesNotMatch(workflow, /path:\s*['"]?\.['"]?/);
+});
+
+test("ships indexable search metadata and crawlable fallback content", async () => {
+  const [html, sitemap, robots, about] = await Promise.all([
+    readFile(new URL("../github/index.html", import.meta.url), "utf8"),
+    readFile(new URL("../public/sitemap.xml", import.meta.url), "utf8"),
+    readFile(new URL("../public/robots.txt", import.meta.url), "utf8"),
+    readFile(new URL("../public/about-me.html", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(html, /<title>MCHOSE A5 Pro Max Driver/);
+  assert.match(html, /name="robots" content="index, follow/);
+  assert.match(html, /rel="canonical" href="https:\/\/z750sasr\.github\.io\/mchose-a5-pro-max-web-driver\/"/);
+  assert.match(html, /<h1>MCHOSE A5 Pro Max Driver<\/h1>/);
+  assert.match(html, /Configure your MCHOSE A5 mouse online/);
+
+  const structuredDataSource = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(structuredDataSource);
+  const structuredData = JSON.parse(structuredDataSource);
+  assert.equal(structuredData["@type"], "WebApplication");
+  assert.equal(structuredData.offers.price, 0);
+
+  assert.match(sitemap, /<loc>https:\/\/z750sasr\.github\.io\/mchose-a5-pro-max-web-driver\/<\/loc>/);
+  assert.match(robots, /Sitemap: https:\/\/z750sasr\.github\.io\/mchose-a5-pro-max-web-driver\/sitemap\.xml/);
+  assert.match(about, /name="robots" content="noindex, follow"/);
 });
