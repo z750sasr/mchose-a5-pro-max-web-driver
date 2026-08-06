@@ -105,14 +105,6 @@ The app selects the vendor configuration collection on usage page `FFFF` and com
 
 Firmware flashing is deliberately excluded. Use the supplied MCHOSE desktop updater for firmware and recovery operations.
 
-## Edit the hardware information at the top
-
-The introductory hardware block is intentionally separated from the interface code. Edit:
-
-[`web-driver-app/lib/hardware-content.ts`](web-driver-app/lib/hardware-content.ts)
-
-Change the title, description, or facts in `HARDWARE_INTRO`; the top section updates automatically. See [Hardware notes](docs/HARDWARE.md) for examples and guidance.
-
 ## Run locally
 
 Requirements: Node.js 22.13 or newer and a current desktop version of Chrome or Edge.
